@@ -1,27 +1,7 @@
-# Materials: a graph (engine/shader/node.bend) together with the values of
-# its parameters. The same idea as a Material and a Material Instance in
-# Unreal, or a material using a Shader Graph in Unity.
-#
-# The graph decides the shader; it is compiled once. The values are
-# uniforms: changing one changes what you see without compiling anything.
-# An instance is the same graph with other values, so two waters (a sea and
-# a lake) can share one shader.
-#
-# A value is a parameter's name and its numbers: one for a float, three for
-# a vec3 (a color). main.js reads each value's uniform name from here and
-# hands the numbers to the GPU; it never writes a name itself.
-#
-# Limits now:
-# - Meshes only (the mesh shader in engine/shader/glsl.bend). Lines keep
-#   their own fixed shader.
-# - A value is a plain list of numbers; its size is checked against the
-#   parameter's type by a law (complete), not by Bend's types. A material
-#   nobody wrote that law for can carry a wrong size, and the GPU then
-#   ignores or misreads it.
-# - Nothing in the editor changes values yet: no fields or sliders exist,
-#   and none are added until they are asked for.
-# - Each instance compiles its own copy of the shader: main.js does not
-#   share programs between materials with the same graph yet.
+# A material instance owns its values and refers to one shader.
+# Bend graphs carry their node tree. Imported shaders use a stable ID from
+# the project's shader catalog, which also defines their parameter defaults.
+# The renderer shares the linked program between instances of the same shader.
 
 import Base
 import ./shader/node.bend as N
@@ -33,16 +13,36 @@ type Value is Data:
 
 type Material is Data:
   Material{graph: N.Node, values: List<&2, Value>}
+  Imported{shader: String, overrides: List<&2, Value>}
+
+def imported(shader: String) -> Material:
+  Imported{shader, Nil{}}
+
+def missing() -> Material:
+  Material{N.Rgb{1.0, 0.0, 1.0}, Nil{}}
 
 def graph(m: Material) -> N.Node:
-  Material{g, _} = m
-  g
+  match m:
+    case Material{g, _}:
+      g
+    case Imported{_, _}:
+      N.Rgb{1.0, 0.0, 1.0}
+
+def shader_id(m: Material) -> String:
+  match m:
+    case Material{_, _}:
+      ""
+    case Imported{id, _}:
+      id
 
 def values(m: Material) -> List<&2, Value>:
-  Material{_, vs} = m
-  vs
+  match m:
+    case Material{_, vs}:
+      vs
+    case Imported{_, vs}:
+      vs
 
-# The fragment shader of a material, written by Bend.
+# The fragment shader of a graph material, or the missing asset color.
 def frag(m: Material) -> String:
   Glsl.mesh_frag(graph(m))
 
@@ -55,10 +55,13 @@ def numbers(v: Value) -> List<&2, F32>:
   Value{_, xs} = v
   xs
 
-# An instance: the same graph with other values.
+# An instance keeps the shader and replaces its values.
 def instance(m: Material, vs: List<&2, Value>) -> Material:
-  Material{g, _} = m
-  Material{g, vs}
+  match m:
+    case Material{g, _}:
+      Material{g, vs}
+    case Imported{id, _}:
+      Imported{id, vs}
 
 # Completeness
 # ============
@@ -90,7 +93,12 @@ def all_filled(ps: List<&2, N.Node>, +vs: List<&2, Value>) -> Bool:
     case h <> t:
       (filled(h, vs) && all_filled(t, vs))
 
-# A material is complete when every parameter of its graph has a value of
-# the right size. The laws check it for each material.
+# Graphs need a value of the right size for every parameter. Imported
+# materials inherit defaults from their catalog asset. Its schema and GPU
+# interface are checked at import and link time.
 def complete(+m: Material) -> Bool:
-  all_filled(N.params(graph(m)), values(m))
+  match m:
+    case Material{g, vs}:
+      all_filled(N.params(g), vs)
+    case Imported{id, _}:
+      Bool.not(String.is_empty(id))

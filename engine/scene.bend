@@ -147,6 +147,18 @@ def put(s: Scene, +i: U32, +x: Thing) -> Scene:
   Scene{xs} = s
   Scene{put_go(xs, i, x)}
 
+def replace_material(t: Thing, m: Mat.Material) -> Thing:
+  Thing{n, p, l} = t
+  match l:
+    case Shown{shape, _}:
+      Thing{n, p, Shown{shape, m}}
+    case other:
+      Thing{n, p, other}
+
+# Replacing the material uses the object's single material slot.
+def with_material(+s: Scene, +i: U32, m: Mat.Material) -> Scene:
+  put(s, i, replace_material(at(s, i), m))
+
 def count(s: Scene) -> Nat:
   Scene{xs} = s
   List.length(&2, Thing, xs)

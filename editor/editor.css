@@ -18,3 +18,13 @@
 .editor-panels__fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-1); }
 .editor-panels__field { min-width: 0; }
 .editor-panels__field .input { width: 100%; min-width: 0; }
+.editor-material__field, .editor-material__group { padding: var(--space-1) var(--space-2); min-width: 0; }
+.editor-material__group { border: 0; margin: 0; }
+.editor-material__dropdown, .editor-material__dropdown > .btn { width: 100%; }
+.editor-material__dropdown > .btn { justify-content: space-between; }
+.editor-material__toggle { align-self: flex-start; }
+.editor-material__slider { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-sm); }
+.editor-material__range { flex: 1; min-width: 0; margin: 0; accent-color: var(--accent); }
+.editor-material__warnings { overflow: auto; max-height: 38%; padding: var(--space-2); }
+.editor-material__diagnostics { margin: 0; padding: var(--space-1) var(--space-2) var(--space-1) var(--space-5); overflow-wrap: anywhere; }
+.editor-material__diagnostics p { white-space: pre-wrap; margin: var(--space-1) 0 var(--space-2); }

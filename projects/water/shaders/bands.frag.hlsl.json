@@ -1,0 +1,13 @@
+{
+  "label": "Bands (HLSL)",
+  "stage": "fragment",
+  "lighting": "unlit",
+  "parameters": [
+    { "name": "tint", "label": "Tint", "control": "color", "default": [0.93, 0.42, 0.12] },
+    { "name": "density", "label": "Density", "control": "slider", "min": 0.5, "max": 8, "step": 0.1, "default": 1.9 },
+    { "name": "pattern", "label": "Pattern", "control": "dropdown", "default": 0, "options": [
+      { "label": "Parallel", "value": 0 }, { "label": "Square", "value": 1 }
+    ] },
+    { "name": "highlights", "label": "Highlights", "control": "toggle", "default": true }
+  ]
+}

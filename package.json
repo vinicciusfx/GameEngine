@@ -5,7 +5,7 @@
   "version": "0.0.1",
   "scripts": {
     "dev": "bun tools/dev.ts",
-    "build": "bend index.html -o dist",
+    "build": "bun tools/shaders/catalog.js && bend index.html -o dist",
     "check": "bun tools/check.ts",
     "test": "bun tools/test.ts"
   },

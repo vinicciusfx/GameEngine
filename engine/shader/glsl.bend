@@ -5,23 +5,20 @@
 # only hands it to the driver. Unity and Unreal do the same with HLSL: their
 # material graphs write the text, and nobody types it.
 #
-# Each shader is a list of lines, joined with a line break. Later the lines
-# come from material graphs (engine/shader/node.bend); for now they are the
-# two shaders the World's lines need.
+# Each shader is a list of lines joined with a line break. Mesh fragments
+# can come from a Bend graph or a project asset. Both use mesh_vert().
 #
 # Limits now:
-# - To Bend this is plain text. `bun run check` cannot see a GLSL mistake;
-#   only the GPU driver finds it, in the browser, when main.js compiles it
-#   (main.js then stops with the driver's message). Typed nodes
-#   (engine/shader/node.bend) will catch most mistakes before that.
-# - Bend text is a list of characters, slow to build. Shaders are built
-#   once, at start-up, never per frame.
+# - To Bend this is plain text. Typed nodes (engine/shader/node.bend) check
+#   graph expressions. The WebGL driver checks shader text at link time.
+# - Bend text is slow to build. Mesh programs are linked on first use and
+#   shared between instances (engine/shader/webgl.js).
 # - The engine's own uniform and attribute names (u_vp, a_pos…) are written
 #   here and again in main.js; nothing checks that the two match. Material
 #   parameters do not have this problem: main.js asks material.bend for
 #   their names.
-# - Material meshes have no light: their color comes straight from the
-#   graph. Only the skinned shaders (skinned_frag) are lit, by one sun.
+# - Material meshes have no scene lighting. The internal skinned renderer
+#   has its own lighting in skinned_frag.
 
 import Base
 import ./node.bend as N
@@ -71,9 +68,16 @@ def mesh_vert() -> String:
     "#version 300 es",
     "uniform mat4 u_vp;",
     "uniform mat4 u_model;",
-    "in vec3 a_pos;",
+    "layout(location = 0) in vec3 a_pos;",
+    "out highp vec3 v_local_position;",
+    "out highp vec3 v_local_view;",
     "void main() {",
-    "  gl_Position = u_vp * u_model * vec4(a_pos, 1.0);",
+    "  mat4 local_to_clip = u_vp * u_model;",
+    "  // In perspective projection the eye maps to clip x = y = w = 0.",
+    "  vec4 eye = inverse(local_to_clip) * vec4(0.0, 0.0, 1.0, 0.0);",
+    "  v_local_position = a_pos;",
+    "  v_local_view = eye.xyz / eye.w - a_pos;",
+    "  gl_Position = local_to_clip * vec4(a_pos, 1.0);",
     "}"])
 
 # Every pixel of a mesh gets the color a graph gives (engine/shader/node.bend),

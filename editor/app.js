@@ -1,10 +1,8 @@
 // The editor: the browser side of the engine, shared by every page that
 // opens a scene (index.html for the engine's projects, refs/*/index.html
-// for reference characters). It only reads the mouse and draws what Bend
-// returns: the World (engine/world.bend) and the camera
-// (engine/camera.bend) decide every number, the scene (PROJECT.bend opens a project)
-// says what is in the World, engine/shader/glsl.bend writes the shaders and
-// engine/material.bend gives the values of their parameters.
+// for reference characters). Bend supplies the World, camera, scene and
+// material instances. The editor handles input and binds graph or project
+// shaders to WebGL.
 
 import { theme } from "bend-ui";
 import { mount } from "bend-ui/web";
@@ -21,6 +19,9 @@ import { mountDefaults } from "./defaults/defaults.js";
 import Panels from "./panels/view.bend";
 import Defaults from "./defaults/defaults.bend";
 import Loco from "../engine/locomotion.bend";
+import { linkProgram } from "../engine/shader/webgl.js";
+import { createMaterials } from "./shaders/materials.js";
+import { materialInspector } from "./shaders/inspector.js";
 
 // Opens the editor on a scene (a Bend value, engine/scene.bend).
 //
@@ -28,7 +29,7 @@ import Loco from "../engine/locomotion.bend";
 // start() when none). `skins` gives, for each figure's skin name, the files to draw it with:
 //   { [name]: { info: <skin.json>, bin: <url of skin.bin>, textures: [url per part] } }
 // written by tools/gltf.ts. A figure whose skin has no entry is drawn as bones.
-export function startEditor(opening, { skins = {}, camera = null } = {}) {
+export function startEditor(opening, { skins = {}, camera = null, shaders = {} } = {}) {
   theme({ mode: "dark", radius: "pill" });   // every button and segmented in the layout is a pill
 
   // A Bend list arrives as cons cells; the GPU wants a flat array.
@@ -45,26 +46,8 @@ export function startEditor(opening, { skins = {}, camera = null } = {}) {
   const canvas = document.getElementById("scene");
   const gl = canvas.getContext("webgl2", { antialias: true });
 
-  // The shaders are written by Bend (engine/shader/glsl.bend); JS only hands
-  // the text to the GPU driver.
-  function shader(type, src) {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src);
-    gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(s));
-    return s;
-  }
-
-  function program(vert, frag) {
-    const p = gl.createProgram();
-    gl.attachShader(p, shader(gl.VERTEX_SHADER, vert));
-    gl.attachShader(p, shader(gl.FRAGMENT_SHADER, frag));
-    gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
-    return p;
-  }
-
-  const prog = program(Glsl.line_vert(), Glsl.line_frag());
+  const prog = linkProgram(gl, Glsl.line_vert(), Glsl.line_frag());
+  const materials = createMaterials(gl, Glsl.mesh_vert(), shaders, flat);
 
   const u = {
     vp: gl.getUniformLocation(prog, "u_vp"),
@@ -85,43 +68,31 @@ export function startEditor(opening, { skins = {}, camera = null } = {}) {
   gl.enableVertexAttribArray(col);
   gl.vertexAttribPointer(col, 3, gl.FLOAT, false, 24, 12);
 
-  // A material's values go to their uniforms; material.bend names each one.
-  // Setting a value never compiles anything.
-  function setValues(p, values) {
-    for (let l = values; l.$ === "Con"; l = l.tail) {
-      const loc = gl.getUniformLocation(p, Material.uniform(l.head));
-      const xs = flat(Material.numbers(l.head));
-      if (xs.length === 1) gl.uniform1f(loc, xs[0]);
-      else if (xs.length === 3) gl.uniform3fv(loc, xs);
-    }
-  }
-
-  // The scene (the project PROJECT.bend opens): every thing that is shown gets, once, its
-  // shader (from its material), its mesh on the GPU (3 floats per vertex,
-  // 3 indices per triangle) and its model matrix (from its place).
-  // Limit: built once at start-up; a thing added later is not seen (an edit
-  // of place or values is: see edited() below).
   function upload(thing) {
     const look = Scene.look(thing);
     const material = Scene.material(look);
     const shape = Scene.shape(look);
-    const p = program(Glsl.mesh_vert(), Material.frag(material));
-    gl.useProgram(p);
-    setValues(p, Material.values(material));
+    let shader;
+    try {
+      shader = materials.prepare(material);
+    } catch (error) {
+      materials.errors.set(Material.shader_id(material) || Scene.name(thing), error.message);
+      shader = materials.prepare(Material.missing());
+    }
     const idx = new Uint32Array(flat(shape.indices));
     const vao = gl.createVertexArray();
     gl.bindVertexArray(vao);
     gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(flat(shape.vertices)), gl.STATIC_DRAW);
-    const at = gl.getAttribLocation(p, "a_pos");
-    gl.enableVertexAttribArray(at);
-    gl.vertexAttribPointer(at, 3, gl.FLOAT, false, 12, 0);
+    // Every mesh program uses the fixed attribute location in mesh_vert().
+    gl.enableVertexAttribArray(0);
+    gl.vertexAttribPointer(0, 3, gl.FLOAT, false, 12, 0);
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gl.createBuffer());
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
     return {
-      prog: p, vao, count: idx.length,
-      vp: gl.getUniformLocation(p, "u_vp"),
-      model: gl.getUniformLocation(p, "u_model"),
+      vao, count: idx.length, shader,
+      values: materials.values(shader, material),
+      original: material.$ === "Material" ? material : null,
       matrix: flat(Transform.flat(Scene.place(thing))),
     };
   }
@@ -138,10 +109,40 @@ export function startEditor(opening, { skins = {}, camera = null } = {}) {
     const g = shown.get(i);
     if (g) {
       const thing = Scene.at(scene, i);
+      const material = Scene.material(Scene.look(thing));
       g.matrix = flat(Transform.flat(Scene.place(thing)));
-      gl.useProgram(g.prog);
-      setValues(g.prog, Material.values(Scene.material(Scene.look(thing))));
+      g.values = materials.values(g.shader, material);
+      if (material.$ === "Material") g.original = material;
     }
+    redraw();
+  }
+
+  function assignShader(i, id) {
+    const object = shown.get(i);
+    if (!object) return;
+    const current = Scene.material(Scene.look(Scene.at(scene, i)));
+    if (Material.shader_id(current) === id && (id || object.original)) return;
+    const material = id ? Material.imported(id) : object.original;
+    if (!material) return;
+    try {
+      const shader = materials.prepare(material);
+      const values = materials.values(shader, material);
+      scene = Scene.with_material(scene, i, material);
+      object.shader = shader;
+      object.values = values;
+      redraw();
+    } catch (error) {
+      materials.errors.set(id || "Original graph", error.message);
+    }
+  }
+
+  function editParameter(i, name, numbers) {
+    const object = shown.get(i);
+    if (!object?.shader.asset) return;
+    const material = Scene.material(Scene.look(Scene.at(scene, i)));
+    const updated = materials.update(material, object.values.fields, name, numbers);
+    scene = Scene.with_material(scene, i, updated);
+    object.values = materials.values(object.shader, updated);
     redraw();
   }
 
@@ -172,7 +173,7 @@ export function startEditor(opening, { skins = {}, camera = null } = {}) {
   // The mesh (positions, normals, UVs, 4 joints and 4 weights per vertex)
   // goes to the GPU once; every frame Bend gives the skinning matrices
   // (Figure.palette), which go into a float texture the vertex shader reads.
-  const skinProg = program(Glsl.skinned_vert(), Glsl.skinned_frag());
+  const skinProg = linkProgram(gl, Glsl.skinned_vert(), Glsl.skinned_frag());
   const su = {
     vp: gl.getUniformLocation(skinProg, "u_vp"),
     bones: gl.getUniformLocation(skinProg, "u_bones"),
@@ -275,19 +276,33 @@ export function startEditor(opening, { skins = {}, camera = null } = {}) {
     orbit: (c, dx, dy) => Camera.orbit(c, dx, dy),
   });
 
-  // The Scene and Details panels (editor/panels/view.bend): the scene's things and the
-  // selected one's components. Bend says what they show and what a click or a typed number
-  // does; Bend-UI's driver draws it. When an edit made a new scene, it comes back here.
+  const inspector = materialInspector({
+    assets: materials.assets,
+    errors: materials.errors,
+    inspect: (i) => shown.get(i),
+    assign: (i, id) => {
+      assignShader(i, id);
+      panels.set(Panels.with_scene(panels.state, scene));
+    },
+    edit: (i, name, numbers) => {
+      editParameter(i, name, numbers);
+      moved(scene);
+    },
+  });
+  inspector.render(0);
   const panels = mount(document.getElementById("editor-panels"), {
     init: () => Panels.start(scene, still.matches),
     render: Panels.render, on_event: Panels.on_event, on_input: Panels.on_input,
   }, {
     adopt: true,
-    changed: (st) => {
+    patched: inspector.attach,
+    changed: (st, before) => {
+      const selected = Panels.selected(st);
+      if (selected !== Panels.selected(before)) inspector.render(selected);
       const next = Panels.scene(st);
-      if (next === scene) return;   // a thing was picked: the scene is the same
+      if (next === scene) return;
       scene = next;
-      edited(Panels.selected(st));
+      edited(selected);
     },
   });
   still.addEventListener("change", () => panels.dispatch(Panels.motion_event(still.matches)));
@@ -310,6 +325,7 @@ export function startEditor(opening, { skins = {}, camera = null } = {}) {
     queued = false;
     const w = canvas.width, h = canvas.height;
     const frame = flat(Camera.frame(cam, w / Math.max(h, 1)));
+    const viewProjection = frame.slice(0, 16);
     gl.viewport(0, 0, w, h);
     gl.clearColor(skyR, skyG, skyB, 1);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
@@ -323,9 +339,11 @@ export function startEditor(opening, { skins = {}, camera = null } = {}) {
     drawSkins(frame);
     gl.disable(gl.DEPTH_TEST);
     for (const t of shown.values()) {
-      gl.useProgram(t.prog);
-      gl.uniformMatrix4fv(t.vp, false, frame.slice(0, 16));
-      gl.uniformMatrix4fv(t.model, false, t.matrix);
+      const { program, vp, model } = t.shader.mesh;
+      gl.useProgram(program);
+      gl.uniformMatrix4fv(vp, false, viewProjection);
+      gl.uniformMatrix4fv(model, false, t.matrix);
+      for (const apply of t.values.apply) apply();
       gl.bindVertexArray(t.vao);
       gl.drawElements(gl.TRIANGLES, t.count, gl.UNSIGNED_INT, 0);
     }
@@ -334,7 +352,7 @@ export function startEditor(opening, { skins = {}, camera = null } = {}) {
     gl.enable(gl.DEPTH_TEST);
     gl.depthMask(false);
     gl.useProgram(prog);
-    gl.uniformMatrix4fv(u.vp, false, frame.slice(0, 16));
+    gl.uniformMatrix4fv(u.vp, false, viewProjection);
     gl.uniform3fv(u.eye, frame.slice(16, 19));
     gl.uniform2fv(u.fade, flat(World.fade(cam)));
     gl.bindVertexArray(vao);

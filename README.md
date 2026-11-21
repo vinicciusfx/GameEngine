@@ -10,6 +10,20 @@ bun run check    # laws, types, tests, reference laws, the refs/ fence
 bun run build    # bundle to dist/
 ```
 
+### Windows with WSL 2
+
+Install Bun and Bend inside the Linux distribution. Keep the Bend checkout next to this project, so both are visible from WSL. From PowerShell in the project folder, run the dev server using your default WSL distribution.
+
+```powershell
+wsl --cd (Get-Location).Path --exec bash -lc 'bun run dev'
+```
+
+Open [the editor](http://localhost:3100/) in your Windows browser. On Windows drives mounted in WSL, the dev server checks source files periodically so it can pick up edits from Windows programs. HLSL needs the Linux versions of [DXC](https://github.com/microsoft/DirectXShaderCompiler/releases) and SPIRV-Cross (`sudo apt install spirv-cross` on Ubuntu).
+
+## Shaders and materials
+
+Open `http://localhost:3100/?project=water` and select **Water**. In **Details → Material → Shader**, choose **Ripples (GLSL)** or **Bands (HLSL)**. Add fragment shaders and their JSON descriptors to `projects/<project>/shaders/`. The dev server rebuilds the catalog when those files change. HLSL import uses DXC and SPIRV-Cross. See the [shader module guide](docs/shaders.md) for the asset format, supported controls, tools, and architectural decisions.
+
 ## Files
 
 | File | What it is |
@@ -23,6 +37,7 @@ bun run build    # bundle to dist/
 | `engine/vec.bend`, `engine/quat.bend`, `engine/transform.bend` | Vectors, 4x4 matrices, quaternions, position/rotation/scale |
 | `engine/scene.bend` | The scene as data: things with a place and a look (Shown, Rigged, Hidden) |
 | `engine/mesh.bend`, `engine/material.bend`, `engine/shader/` | Meshes, material graphs, GLSL written by Bend (incl. the skinned shaders) |
+| `projects/*/shaders/`, `tools/shaders/`, `editor/shaders/` | Project shader assets, import tools, and the material inspector's controls |
 | `engine/skeleton.bend` | The rig standard: bones with roles (Root, Deform, Twist, Support, Chain) and slots, and its laws |
 | `engine/pose.bend` | Poses: local transforms, model/world matrices in one pass, bones as lines |
 | `engine/clip.bend` | Clips: rotation and position keys, sampled with slerp, looping |

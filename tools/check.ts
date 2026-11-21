@@ -22,7 +22,7 @@ const typed = [
   "engine/material.bend", "engine/scene.bend", "engine/skeleton.bend", "engine/pose.bend", "engine/clip.bend", "engine/blend.bend", "engine/gait.bend", "engine/skin.bend", "engine/helpers.bend", "engine/ik.bend", "engine/hand.bend", "engine/figure.bend", "engine/locomotion.bend",
   "projects/water/water.bend", "projects/water/scene.bend", "projects/character/scene.bend", "projects/character/arm.bend",
   "PROJECT.bend", "editor/panels/panels.bend", "editor/panels/view.bend", "editor/defaults/view.bend",
-  "tests/quat.bend", "tests/transform.bend", "tests/pose.bend", "tests/clip.bend", "tests/locomotion.bend", "tests/ik.bend", "tests/panels.bend",
+  "tests/quat.bend", "tests/transform.bend", "tests/pose.bend", "tests/clip.bend", "tests/locomotion.bend", "tests/ik.bend", "tests/panels.bend", "tests/material.bend",
 ];
 
 function step(title: string) { console.log(`\n== ${title}`); }
@@ -37,6 +37,7 @@ console.log(`${typed.length} files compile`);
 
 step("tests");
 await $`bun tools/test.ts`;
+await $`bun test tests/shader-catalog.test.js`;
 
 // Reference characters (refs/, gitignored): their own laws, when they are
 // on this machine. Each has a PROOF.bend next to its generated skeleton.

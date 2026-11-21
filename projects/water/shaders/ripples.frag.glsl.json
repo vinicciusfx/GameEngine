@@ -1,0 +1,14 @@
+{
+  "label": "Ripples (GLSL)",
+  "stage": "fragment",
+  "lighting": "unlit",
+  "parameters": [
+    { "name": "tint", "label": "Tint", "control": "color", "default": [0.08, 0.67, 0.76] },
+    { "name": "density", "label": "Density", "control": "slider", "min": 0.5, "max": 8, "step": 0.1, "default": 2.4 },
+    { "name": "phase", "label": "Phase", "control": "number", "default": 0 },
+    { "name": "pattern", "label": "Pattern", "control": "dropdown", "default": 0, "options": [
+      { "label": "Radial", "value": 0 }, { "label": "Diagonal", "value": 1 }
+    ] },
+    { "name": "highlights", "label": "Highlights", "control": "toggle", "default": true }
+  ]
+}

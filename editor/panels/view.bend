@@ -173,8 +173,8 @@ def chevron(reduced: Bool) -> List<&2, Web.Attr<Ev>>:
 
 def section(+x: O.Section, +s: U32, +still: Bool) -> Web.HTML<Ev>:
   match x:
-    case O.Section{title, rs}:
-      Ui.disclosure_with(Ev, "", [Web.attr{"open", ""}], chevron(D.reduce_motion(still)), [Ui.disclosure_title(Ev, title)], rows(rs, s, 0))
+    case O.Section{+title, rs}:
+      Ui.disclosure_with(Ev, "", [Web.attr{"open", ""}, Web.attr{"data-details-section", title}], chevron(D.reduce_motion(still)), [Ui.disclosure_title(Ev, title)], rows(rs, s, 0))
 
 def sections(+xs: List<&2, O.Section>, +s: U32, +still: Bool) -> List<&2, Web.HTML<Ev>>:
   match xs:

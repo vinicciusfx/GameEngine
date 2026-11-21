@@ -3,5 +3,8 @@
 
 import Project from "./PROJECT.bend";
 import { startEditor } from "./editor/app.js";
+import shaders from "./editor/shaders/catalog.generated.json";
 
-startEditor(Project.opening(), { camera: Project.opening_camera() });
+const slug = new URLSearchParams(location.search).get("project") ?? "";
+const project = Project.preview(slug);
+startEditor(Project.start(project), { camera: Project.camera(project), shaders: shaders[Project.folder(project)] });

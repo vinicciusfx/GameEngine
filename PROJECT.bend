@@ -37,6 +37,26 @@ def name(p: Project) -> String:
     case Character{}:
       "Character"
 
+def folder(p: Project) -> String:
+  match p:
+    case Water{}:
+      "water"
+    case Character{}:
+      "character"
+
+def pick_preview(water: Bool, character: Bool) -> Project:
+  match water character:
+    case True{} _:
+      Water{}
+    case _ True{}:
+      Character{}
+    case _ _:
+      open()
+
+# A preview link can open a project explicitly. Unknown names use the default.
+def preview(+slug: String) -> Project:
+  pick_preview(String.eq(slug, "water"), String.eq(slug, "character"))
+
 def start(p: Project) -> S.Scene:
   match p:
     case Water{}:

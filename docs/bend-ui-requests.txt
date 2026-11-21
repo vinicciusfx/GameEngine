@@ -28,3 +28,9 @@ the engine uses the closest Bend-UI piece, and each place says so in its
    the root (for example data-motion="reduce") that turns off every Bend-UI
    transition would let the engine pass its setting on. Today the engine
    turns off the disclosure chevron's transition by hand.
+
+4. A range field
+
+   The material inspector uses a native range input next to a numeric
+   readout. A Bend-UI range field could provide the same min, max, and
+   step semantics with the shared field sizing and focus styles.

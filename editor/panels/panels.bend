@@ -141,6 +141,8 @@ def animation_section(+ps: List<&2, Mat.Value>) -> List<&2, Section>:
 
 def look_sections(l: S.Look) -> List<&2, Section>:
   match l:
+    case S.Shown{_, Mat.Imported{_, _}}:
+      [Section{"Material", Nil{}}]
     case S.Shown{_, m}:
       [Section{"Material", value_rows(Mat.values(m))}]
     case S.Hidden{}:
